@@ -49,6 +49,21 @@ def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
     
     cleaned = raw.strip()
 
+    # ── Method 1: find/rfind ────────────────────────────────────────────────────────
+    # # Find the JSON object by locating the first { and last }
+    # start = cleaned.find("{")
+    # end = cleaned.rfind("}")
+
+    # if start == -1 or end == -1:
+    #     print(f"No JSON object found in response for {Path(path).name}")
+    #     print(f"Raw: {repr(cleaned[:200])}")
+    #     return ImageTags(path=path, category="other", tags=[],
+    #                      ocr_text="", is_nsfw=False,
+    #                      description="parse error", backend=backend)
+
+    # cleaned = cleaned[start : end + 1]  # slice out exactly the JSON object
+    
+    # ── Method 2: Regex ────────────────────────────────────────────────────────
     # Step 1: strip markdown code fences if present
     # handles ```json ... ``` or ``` ... ```
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned).strip()
@@ -58,10 +73,10 @@ def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
         cleaned = match.group(0)
-
+        
     # Step 3: try parsing
     try:
-        data = json.loads(raw.strip())
+        data = json.loads(cleaned)
         return ImageTags(
             path=path,
             category=data.get("category", "other"),
@@ -73,8 +88,8 @@ def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
         )
     except json.JSONDecodeError as e:
         # Step 4: log the raw response so you can see what went wrong
-        print(f"  Parse failed for {Path(path).name}: {e}")
-        print(f"  Raw response was: {repr(raw[:200])}")
+        print(f"Parse failed for {Path(path).name}: {e}")
+        print(f"Raw response was: {repr(raw)}")
         return ImageTags(path=path, category="other", tags=[],
                          ocr_text="", is_nsfw=False,
                          description="parse error", backend=backend)
@@ -90,6 +105,11 @@ def tag_with_ollama(image_path: str, model: str = "llava:7b") -> ImageTags:
             "prompt": PROMPT,
             "images": [b64],
             "stream": False,
+            "options": {
+                "num_predict": 512,   # max tokens to generate
+                "temperature": 0.1,   # lower = more consistent JSON formatting
+            }
+
         },
         timeout=60,
     )
