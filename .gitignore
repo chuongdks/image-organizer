@@ -38,3 +38,4 @@ build/
 ### ENV Files ###
 /pics
 /venv
+/test
