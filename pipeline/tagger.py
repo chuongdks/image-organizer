@@ -4,6 +4,13 @@ import httpx
 from pathlib import Path
 from dataclasses import dataclass
 import re
+from PIL import Image as PILImage
+import io
+import time
+
+MAX_SIZE = (1024, 1024)  # LLaVA doesn't need more than this
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds to wait before retrying
 
 # ── Shared tag schema ──────────────────────────────────────────────
 # Both backends return the same structure so the rest of the app
@@ -41,6 +48,16 @@ def _image_to_base64(image_path: str) -> tuple[str, str]:
         ".webp": "image/webp"
     }
     media_type = media_map.get(ext, "image/jpeg")
+    
+    # Resize before encoding
+    with PILImage.open(image_path) as img:
+        img.thumbnail(MAX_SIZE, PILImage.LANCZOS)  # shrinks in place, keeps aspect ratio
+        buffer = io.BytesIO()
+        fmt = "JPEG" if media_type == "image/jpeg" else "PNG"
+        img.save(buffer, format=fmt, quality=85)
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode("utf-8"), media_type
+    
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8"), media_type
 
@@ -98,25 +115,48 @@ def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
 def tag_with_ollama(image_path: str, model: str = "llava:7b") -> ImageTags:
     b64, _ = _image_to_base64(image_path)
 
-    response = httpx.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": model,
-            "prompt": PROMPT,
-            "images": [b64],
-            "stream": False,
-            "options": {
-                "num_predict": 512,   # max tokens to generate
-                "temperature": 0.1,   # lower = more consistent JSON formatting
-            }
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = httpx.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": model,
+                    "prompt": PROMPT,
+                    "images": [b64],
+                    "stream": False,
+                    "options": {
+                        "num_predict": 512,   # max tokens to generate
+                        "temperature": 0.1,   # lower = more consistent JSON formatting
+                    }
 
-        },
-        timeout=60,
-    )
-    response.raise_for_status()
-    raw = response.json()["response"]
-    return _parse_response(raw, image_path, backend="ollama")
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            raw = response.json()["response"]
+            return _parse_response(raw, image_path, backend="ollama")
+        
+        except httpx.HTTPStatusError as e:
+            print(f"Attempt {attempt}/{MAX_RETRIES} failed for "
+                  f"{Path(image_path).name}: {e.response.status_code}")
+            if attempt < MAX_RETRIES:
+                print(f"  ⏳ Waiting {RETRY_DELAY}s before retry...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print(f"  ✗ All retries failed, skipping image")
+                return ImageTags(path=image_path, category="other", tags=[],
+                                 ocr_text="", is_nsfw=False,
+                                 description="server error", backend="ollama")
 
+        except httpx.TimeoutException:
+            print(f"Timeout on attempt {attempt}/{MAX_RETRIES}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+            else:
+                return ImageTags(path=image_path, category="other", tags=[],
+                                 ocr_text="", is_nsfw=False,
+                                 description="timeout", backend="ollama")
+                
 # ── Backend 2: Claude Haiku 4.5 — paid, higher quality ────────────
 def tag_with_claude(image_path: str, api_key: str,
                     model: str = "claude-haiku-4-5-20251001") -> ImageTags:
