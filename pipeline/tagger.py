@@ -19,12 +19,13 @@ RETRY_DELAY = 5  # seconds to wait before retrying
 @dataclass
 class ImageTags:
     path: str
-    category: str          # e.g. "meme", "screenshot", "scenery", "game"
-    tags: list[str]        # e.g. ["funny", "text-heavy", "dark humor"]
-    ocr_text: str          # any readable text found in the image
-    is_nsfw: bool
-    description: str       # one sentence summary
-    backend: str           # "ollama" or "claude"
+    category: str           # e.g. "meme", "screenshot", "scenery", "game"
+    tags: list[str]         # e.g. ["funny", "text-heavy", "dark humor"]
+    ocr_text: str           # any readable text found in the image
+    is_nsfw: bool           # is this image has nsfw things
+    failed: bool = False    # fail parsing flag
+    description: str        # one sentence summary
+    backend: str            # "ollama" or "claude"
 
 # ── Shared prompt ──────────────────────────────────────────────────
 PROMPT = """Analyze this image and respond ONLY with a JSON object, no markdown, no extra text.
@@ -108,7 +109,7 @@ def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
         print(f"Parse failed for {Path(path).name}: {e}")
         print(f"Raw response was: {repr(raw)}")
         return ImageTags(path=path, category="other", tags=[],
-                         ocr_text="", is_nsfw=False,
+                         ocr_text="", is_nsfw=False, failed=True, 
                          description="parse error", backend=backend)
 
 # ── Backend 1: Ollama (LLaVA) — FREE, runs locally ────────────────

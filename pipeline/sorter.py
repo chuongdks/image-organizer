@@ -9,7 +9,9 @@ def sort_images(records: list[ImageRecord], tags: list[ImageTags],
 
     for record, tag in zip(records, tags):
         # Determine destination folder
-        if tag.is_nsfw:
+        if tag.failed:
+            folder = output / "failed"
+        elif tag.is_nsfw:
             folder = output / "nsfw"
         elif record.duplicate_group is not None:
             folder = output / "duplicates" / f"group_{record.duplicate_group}"
