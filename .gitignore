@@ -40,3 +40,4 @@ build/
 /venv
 /test
 /output
+/__pycache__

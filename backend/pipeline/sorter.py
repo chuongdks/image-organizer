@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
-from pipeline.ingestor import ImageRecord
-from pipeline.tagger import ImageTags
+from backend.pipeline.ingestor import ImageRecord
+from backend.pipeline.tagger import ImageTags
 
 def sort_images(records: list[ImageRecord], tags: list[ImageTags], 
                 output_folder: str) -> None:

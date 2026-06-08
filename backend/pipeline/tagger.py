@@ -23,9 +23,9 @@ class ImageTags:
     tags: list[str]         # e.g. ["funny", "text-heavy", "dark humor"]
     ocr_text: str           # any readable text found in the image
     is_nsfw: bool           # is this image has nsfw things
-    failed: bool = False    # fail parsing flag
     description: str        # one sentence summary
     backend: str            # "ollama" or "claude"
+    failed: bool = False    # fail parsing flag
 
 # ── Shared prompt ──────────────────────────────────────────────────
 PROMPT = """Analyze this image and respond ONLY with a JSON object, no markdown, no extra text.
@@ -40,7 +40,8 @@ PROMPT = """Analyze this image and respond ONLY with a JSON object, no markdown,
 """
 
 # ── Helpers ────────────────────────────────────────────────────────
-def _image_to_base64(image_path: str) -> tuple[str, str]:
+# Convert image to base64 for LLM to read
+def _image_to_base64(image_path: str) -> tuple[str, str]: 
     """Returns (base64_data, media_type)"""
     ext = Path(image_path).suffix.lower()
     media_map = {
@@ -62,6 +63,7 @@ def _image_to_base64(image_path: str) -> tuple[str, str]:
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8"), media_type
 
+# Parse raw JSON into Python Dict and return the ImageTags class
 def _parse_response(raw: str, path: str, backend: str) -> ImageTags:
     """Parse the JSON response from either backend."""
     

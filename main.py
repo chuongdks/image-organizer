@@ -1,7 +1,7 @@
-from pipeline.ingestor import scan_folder, find_duplicates
-from pipeline.tagger import tag_with_ollama, tag_with_claude
+from backend.pipeline.ingestor import scan_folder, find_duplicates
+from backend.pipeline.tagger import tag_with_ollama, tag_with_claude
 from collections import defaultdict
-from pipeline.sorter import sort_images
+from backend.pipeline.sorter import sort_images
 import json, os
 
 BACKEND = "ollama"           # switch to "claude" to use Haiku
